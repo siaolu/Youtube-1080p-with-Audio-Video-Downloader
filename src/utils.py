@@ -1,49 +1,55 @@
-import subprocess
-import sys
-from tkinter import filedialog, messagebox
-from config import timelogger
+# utils.py
+import os
+import logging
+import yaml
 
-@timelogger
-def install_and_import(package):
+def setup_logging(default_path='logging.yaml', default_level=logging.INFO, env_key='LOG_CFG'):
     """
-    Attempts to import a package. If the package is not installed, tries to install it.
-    If the package cannot be installed or imported, the application will raise an exception
-    and exit with an error message.
-
-    Args:
-        package (str): The name of the package to be checked and potentially installed.
-
-    Raises:
-        ImportError: If the package cannot be installed or imported.
+    Setup logging configuration from a YAML file.
     """
-    try:
-        __import__(package)
-        print(f"{package} is successfully imported.")
-    except ImportError:
-        try:
-            print(f"Attempting to install {package}...")
-            subprocess.check_call([sys.executable, "-m", "pip", "install", package])
-            __import__(package)
-            print(f"{package} has been successfully installed.")
-        except subprocess.CalledProcessError as e:
-            error_message = f"Failed to install the package {package}. Please install it manually."
-            print(error_message)
-            messagebox.showerror("Installation Error", error_message)
-            sys.exit(f"Exiting due to failure in installing necessary package: {package}")
-
-@timelogger
-def open_location(root):
-    """
-    Opens a dialog for the user to select a directory. Returns the directory path along with a status message and color.
-    
-    Args:
-        root (Tk): The root window of the application for anchoring the file dialog.
-    
-    Returns:
-        tuple: Directory path, message, and message color indicating success or failure.
-    """
-    folder_name = filedialog.askdirectory(parent=root)
-    if folder_name:
-        return folder_name, "Directory selected: " + folder_name, "green"
+    path = os.getenv(env_key, default_path)
+    if os.path.exists(path):
+        with open(path, 'rt') as f:
+            config = yaml.safe_load(f.read())
+        logging.config.dictConfig(config)
     else:
-        return None, "Please choose a directory!", "red"
+        logging.basicConfig(level=default_level)
+
+def load_config(config_file='app_config.yaml'):
+    """
+    Load application configuration from a YAML file.
+    """
+    if os.path.exists(config_file):
+        with open(config_file, 'r') as file:
+            config = yaml.safe_load(file)
+        return config
+    else:
+        raise FileNotFoundError(f"No configuration file found at {config_file}")
+
+def safe_file_operation(func):
+    """
+    Decorator to perform safe file operations with exception handling.
+    """
+    def wrapper(*args, **kwargs):
+        try:
+            return func(*args, **kwargs)
+        except Exception as e:
+            logging.error(f"File operation failed: {e}")
+            return None
+    return wrapper
+
+@safe_file_operation
+def save_to_file(file_path, data):
+    """
+    Save data to a file safely.
+    """
+    with open(file_path, 'w') as file:
+        file.write(data)
+
+@safe_file_operation
+def read_from_file(file_path):
+    """
+    Read data from a file safely.
+    """
+    with open(file_path, 'r') as file:
+        return file.read()

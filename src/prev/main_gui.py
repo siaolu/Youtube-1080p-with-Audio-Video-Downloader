@@ -1,3 +1,5 @@
+# module : Defunct : not used with redesign of display subsystem
+# - provdied for reference purposes
 # main_gui.py
 # Import necessary modules from the project and the standard library.
 from tkinter import Tk, Label, Entry, Button, ttk, messagebox
