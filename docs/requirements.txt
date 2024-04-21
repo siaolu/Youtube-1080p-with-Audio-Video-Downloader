@@ -1,0 +1,5 @@
+pytube==12.1.0  # Used for downloading videos from YouTube
+moviepy==1.0.3  # Used for video editing and conversions
+python-slugify==6.1.2  # Used for generating slugs from strings
+Pillow==9.2.0  # Potentially used for image processing in the GUI
+tkinter  # Check for system installation since it's part of the standard library in Python
