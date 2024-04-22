@@ -1,11 +1,18 @@
 # media_downloads.py
+# Version 0.52
+# Handles asynchronous downloading of media from YouTube, extracting audio, 
+# and logging download status to a SQLite database managed by app_main.py.
+
+import asyncio
 from pytube import YouTube
 import moviepy.editor as mpe
 import os
+from config import statlogtimer, get_db
 
-def download_video(url, output_path):
+@statlogtimer
+async def download_video(url, output_path):
     """
-    Downloads the highest quality video from a YouTube URL.
+    Asynchronously downloads the highest quality video from a YouTube URL.
 
     Args:
         url (str): URL of the YouTube video.
@@ -18,21 +25,23 @@ def download_video(url, output_path):
         yt = YouTube(url)
         video = yt.streams.filter(progressive=True, file_extension='mp4').order_by('resolution').desc().first()
         if video:
-            return video.download(output_path=output_path)
+            filename = await asyncio.to_thread(video.download, output_path=output_path)
+            log_download_success(url, filename)
+            return filename
     except Exception as e:
-        print(f"Failed to download video: {e}")
+        log_download_failure(url, str(e))
         return None
 
-def extract_audio(video_path, output_path):
+@statlogtimer
+def extract_audio(video_path):
     """
-    Extracts audio from a video file and saves it as mp3.
+    Extracts audio from a video file and saves it as an MP3.
 
     Args:
         video_path (str): Path to the video file.
-        output_path (str): Path where the mp3 should be saved.
 
     Returns:
-        str: The path to the mp3 file or None if extraction fails.
+        str: The path to the MP3 file or None if extraction fails.
     """
     try:
         clip = mpe.VideoFileClip(video_path)
@@ -44,27 +53,19 @@ def extract_audio(video_path, output_path):
         print(f"Failed to extract audio: {e}")
         return None
 
-def combine_video_audio(video_path, audio_path, output_path):
-    """
-    Combines video and audio into a single video file.
+def log_download_success(url, filename):
+    db = get_db()
+    db.execute('INSERT INTO downloads (url, status, filename) VALUES (?, ?, ?)', (url, 'success', filename))
+    db.commit()
 
-    Args:
-        video_path (str): Path to the video file.
-        audio_path (str): Path to the audio file.
-        output_path (str): Output path for the combined video file.
+def log_download_failure(url, error_message):
+    db = get_db()
+    db.execute('INSERT INTO downloads (url, status, error) VALUES (?, ?, ?)', (url, 'failure', error_message))
+    db.commit()
 
-    Returns:
-        str: Path to the combined video file or None if combination fails.
-    """
-    try:
-        video_clip = mpe.VideoFileClip(video_path)
-        audio_clip = mpe.AudioFileClip(audio_path)
-        final_clip = video_clip.set_audio(audio_clip)
-        final_file = os.path.join(output_path, os.path.basename(video_path))
-        final_clip.write_videofile(final_file)
-        video_clip.close()
-        audio_clip.close()
-        return final_file
-    except Exception as e:
-        print(f"Failed to combine video and audio: {e}")
-        return None
+if __name__ == "__main__":
+    # This block is only for testing purposes
+    import sys
+    url = sys.argv[1]  # Assume the URL is passed as the first command-line argument
+    output_path = sys.argv[2]  # Assume the output path is passed as the second command-line argument
+    asyncio.run(download_video(url, output_path))

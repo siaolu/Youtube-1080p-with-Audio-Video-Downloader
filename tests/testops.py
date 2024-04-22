@@ -1,86 +1,55 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, mock_open
+import utils
+import media_downloads
 
-from media_downloads import download_video, download_audio, convert_to_mp3, download_and_combine
+class TestUtils(unittest.TestCase):
+    def test_load_config(self):
+        """ Test loading configuration from a file. """
+        with patch('builtins.open', mock_open(read_data='{"debug": true, "port": 5000}')) as mocked_file:
+            config = utils.load_config('dummy_path.json')
+            self.assertEqual(config['debug'], True)
+            self.assertEqual(config['port'], 5000)
+            mocked_file.assert_called_once_with('dummy_path.json', 'r')
 
+    def test_safe_file_operation_fail(self):
+        """ Test the safe file operation decorator handling an exception. """
+        @utils.safe_file_operation
+        def faulty_function(path):
+            raise Exception("Intentional Failure")
 
-class TestDownloadOperations(unittest.TestCase):
-    """
-    Contains unit tests for the media download functions. Tests video, audio, and
-    combination download functionality using mocked objects.
-    """
+        with self.assertRaises(Exception) as context:
+            faulty_function('/fake/path')
 
-    def setUp(self):
-        """
-        Prepares the test fixture, setting up a mock YouTube object and its expected
-        behaviors for streams and downloads.
-        """
-        self.mock_yt = MagicMock()
-        self.mock_yt.streams.filter.return_value.first.return_value = MagicMock(
-            filesize=1024, download=MagicMock(), title="ExampleVideo"
-        )
-        self.mock_folder_name = "test_folder"
+        self.assertTrue('Intentional Failure' in str(context.exception))
 
-    @patch('media_downloads.slugify')
-    @patch('media_downloads.FileMetadata')
-    def test_download_video(self, mock_metadata, mock_slugify):
-        """
-        Ensures that the download_video function processes downloads correctly
-        and handles file metadata properly.
-        """
-        mock_slugify.return_value = "examplevideo"
-        mock_metadata.return_value = MagicMock(filename="examplevideo.mp4")
+    def test_read_write_file(self):
+        """ Test read and write file utility functions. """
+        test_data = "Hello, world!"
+        with patch('builtins.open', mock_open(read_data=test_data)) as mocked_file:
+            # Testing write operation
+            utils.write_to_file('dummy_path.txt', test_data)
+            mocked_file().write.assert_called_once_with(test_data)
 
-        result = download_video(self.mock_yt, self.mock_folder_name)
-        self.assertIn("Downloaded", result[0])
+            # Testing read operation
+            read_data = utils.read_from_file('dummy_path.txt')
+            self.assertEqual(read_data, test_data)
+            mocked_file.assert_called_with('dummy_path.txt', 'r')
 
-    @patch('media_downloads.slugify')
-    @patch('media_downloads.FileMetadata')
-    def test_download_audio(self, mock_metadata, mock_slugify):
-        """
-        Checks that download_audio downloads and converts audio correctly,
-        including calling the convert_to_mp3 function.
-        """
-        self.mock_yt.streams.filter.return_value.desc.return_value.first.return_value = MagicMock(
-            filesize=512, download=MagicMock(), title="ExampleAudio"
-        )
-        mock_slugify.return_value = "exampleaudio"
-        mock_metadata.return_value = MagicMock(filename="exampleaudio.webm")
+class TestMediaDownloads(unittest.TestCase):
+    def test_download_video(self):
+        """ Test the video download functionality. """
+        with patch('media_downloads.YouTube') as mocked_youtube:
+            mocked_youtube.return_value.streams.filter.return_value.order_by.return_value.desc.return_value.first.return_value.download.return_value = 'path/to/video.mp4'
+            result = media_downloads.download_video('http://youtube.com/fakevideo', '/downloads')
+            self.assertEqual(result, 'path/to/video.mp4')
 
-        with patch('media_downloads.convert_to_mp3') as mock_convert:
-            result = download_audio(self.mock_yt, self.mock_folder_name)
-            mock_convert.assert_called_once()
-            self.assertIn("Downloaded and converted", result[0])
-
-    @patch('os.remove')
-    @patch('moviepy.editor.AudioFileClip')
-    def test_convert_to_mp3(self, mock_audio_clip, mock_remove):
-        """
-        Verifies that convert_to_mp3 function converts audio files to mp3 format
-        and performs necessary file operations like deletion of the original.
-        """
-        mock_clip_instance = MagicMock()
-        mock_audio_clip.return_value = mock_clip_instance
-
-        convert_to_mp3(self.mock_folder_name, "exampleaudio")
-
-        mock_audio_clip.assert_called_once_with(self.mock_folder_name + "/exampleaudio.webm")
-        mock_clip_instance.write_audiofile.assert_called_once()
-        mock_remove.assert_called_once()
-
-    @patch('media_downloads.download_video')
-    @patch('media_downloads.download_audio')
-    def test_download_and_combine(self, mock_download_audio, mock_download_video):
-        """
-        Ensures that download_and_combine coordinates the downloading and combining
-        of video and audio into a single file effectively.
-        """
-        mock_download_video.return_value = ("Video downloaded", "green")
-        mock_download_audio.return_value = ("Audio downloaded and converted", "green")
-
-        result = download_and_combine(self.mock_yt, self.mock_folder_name)
-        self.assertIn("combined with audio", result[0])
-
+    def test_extract_audio(self):
+        """ Test audio extraction from video. """
+        with patch('media_downloads.mpe.VideoFileClip') as mocked_clip:
+            mocked_clip.return_value.audio.write_audiofile.return_value = True
+            result = media_downloads.extract_audio('path/to/video.mp4', '/path/to/audio.mp3')
+            self.assertTrue(result)
 
 if __name__ == '__main__':
     unittest.main()

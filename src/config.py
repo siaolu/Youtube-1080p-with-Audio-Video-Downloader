@@ -1,44 +1,43 @@
 # config.py
-import os
+# Version 0.52
+# Handles configuration settings and database connections for the application.
 
-# Helper function to convert environment variable strings to boolean
-def str_to_bool(v):
-    return v.lower() in ("yes", "true", "t", "1")
+import sqlite3
+from flask import g, current_app
+import logging
 
-# Base configuration
-class Config:
-    DEBUG = str_to_bool(os.getenv('DEBUG', 'False'))
-    PORT = int(os.getenv('PORT', 5000))
-    DISPLAY_TYPE = os.getenv('DISPLAY_TYPE', 'curses')  # Default display type
-    STATIC_FOLDER = os.getenv('STATIC_FOLDER', 'build')  # Default folder for static files
+# Setup basic configuration for logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Development specific configuration
-class DevelopmentConfig(Config):
-    DEBUG = True
-    DATABASE_URI = os.getenv('DEV_DATABASE_URI', 'sqlite:///dev.db')
+DATABASE_URI = 'sqlite:///session.db'
 
-# Testing specific configuration
-class TestingConfig(Config):
-    DEBUG = True
-    TESTING = True
-    DATABASE_URI = os.getenv('TEST_DATABASE_URI', 'sqlite:///test.db')
+def get_db():
+    """Opens a new database connection if there is none yet for the
+    current application context.
+    """
+    if 'db' not in g:
+        g.db = sqlite3.connect(
+            DATABASE_URI,
+            detect_types=sqlite3.PARSE_DECLTYPES
+        )
+        g.db.row_factory = sqlite3.Row
+    return g.db
 
-# Production specific configuration
-class ProductionConfig(Config):
-    DEBUG = False
-    PORT = int(os.getenv('PORT', 80))
-    DATABASE_URI = os.getenv('PROD_DATABASE_URI', 'sqlite:///prod.db')
+def close_db(e=None):
+    """If this request connected to the database, close the connection."""
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
 
-# Dictionary to hold configurations for different environments
-config_by_name = dict(
-    dev=DevelopmentConfig,
-    test=TestingConfig,
-    prod=ProductionConfig
-)
+def init_db():
+    """Initializes the database with a schema."""
+    db = get_db()
+    with current_app.open_resource('schema.sql', mode='r') as f:
+        db.cursor().executescript(f.read())
+    db.commit()
 
-# Function to get the appropriate config class based on the environment
-def get_config(config_name):
-    return config_by_name.get(config_name, Config)
-
-# Example usage:
-# current_config = get_config(os.getenv('FLASK_ENV', 'dev'))
+@app.cli.command('init-db')
+def init_db_command():
+    """Flask CLI command to initialize the database."""
+    init_db()
+    print('Initialized the database.')

@@ -1,5 +1,26 @@
-pytube==12.1.0  # Used for downloading videos from YouTube
-moviepy==1.0.3  # Used for video editing and conversions
-python-slugify==6.1.2  # Used for generating slugs from strings
-Pillow==9.2.0  # Potentially used for image processing in the GUI
-# tkinter  # Check for system installation since it's part of the standard library in Python
+# Web framework for handling HTTP requests, useful for the React adapter
+Flask==2.0.2
+
+# For video downloading from YouTube
+pytube==11.0.1
+
+# For processing video and audio files, used in media_downloads.py
+moviepy==1.0.3
+
+# YAML handling for configuration files in utils.py
+PyYAML==5.4.1
+
+# For more advanced logging configurations
+logging==0.4.9.6
+
+# Security features, if using Flask and needing secure session management
+Flask-Session==0.4.0
+
+# Database interaction if needed (not discussed but often necessary)
+SQLAlchemy==1.4.27
+
+# For enhanced security practices (CSRF protection, etc.), if web forms are used
+Flask-WTF==0.15.1
+
+# If any asynchronous operations are needed
+aiohttp==3.7.4

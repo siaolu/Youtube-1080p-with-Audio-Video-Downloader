@@ -1,31 +1,36 @@
-# Use an Ubuntu base image that includes X11 libraries
-FROM ubuntu:20.04
-
-# Set environment variables to avoid interactive dialog during build
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Set the working directory in the container
+# Stage 1: Build and compile Python dependencies
+FROM python:3.9-slim as builder
 WORKDIR /app
 
-# Copy the current directory contents into the container at /app
-COPY . /app
-
-# Install necessary packages including minimal X components and Python
-RUN apt-get update && apt-get install -y \
-    python3 \
-    python3-pip \
-    python3-tk \
-    xauth \
-    xvfb \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+# Install packages required for compilation
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip3 install --no-cache-dir -r requirements.txt
+COPY requirements.txt .
+RUN pip install --user -r requirements.txt
 
-# Setup for X11 forwarding for GUI support
-ENV DISPLAY=:99
-RUN Xvfb :99 -screen 0 1024x768x16 &
+# Stage 2: Production environment
+FROM python:3.9-slim
+WORKDIR /app
 
-# Define entrypoint to launch the application
-ENTRYPOINT ["python3", "./main_gui.py"]
+# Copy installed Python packages from builder stage
+COPY --from=builder /root/.local /root/.local
+# Copy application code
+COPY . .
+
+# Set environment variables
+ENV PATH=/root/.local/bin:$PATH \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
+# Create a non-root user and switch to it
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+USER appuser
+
+# Expose the port the app runs on
+EXPOSE 5000
+
+# Command to run the application
+CMD ["python", "app_main.py"]

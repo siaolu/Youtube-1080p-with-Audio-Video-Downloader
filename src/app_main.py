@@ -1,63 +1,51 @@
 # app_main.py
-from flask import Flask, jsonify, send_from_directory
-from ops-display.display_factory import get_display_adapter
-import os
-import logging
-import argparse
+# Version 0.53
+# Incorporates enhancements for handling asynchronous media downloading tasks and improved database management.
 
-# Set up logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+from flask import Flask, jsonify, request, g, current_app
+import sqlite3
+import asyncio
+from config import get_db, statlogtimer
+import media_downloads
 
-# Flask app initialization
-app = Flask(__name__, static_folder='build')
+app = Flask(__name__)
 
-# Argument parser setup for runtime configuration
-parser = argparse.ArgumentParser(description="Run the application with specified display type.")
-parser.add_argument('--display', type=str, help='Display type: curses, pysimplegui, or react', default='curses')
-args = parser.parse_args()
+DATABASE_URI = 'sqlite:///session.db'
 
-# Fetch display type from command line arguments or default to 'curses'
-DISPLAY_TYPE = args.display
+def init_db():
+    with app.app_context():
+        db = get_db()
+        with app.open_resource('schema.sql', mode='r') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
 
-def initialize_display():
-    """ Initialize display based on the configured display type. """
-    try:
-        display_adapter = get_display_adapter(DISPLAY_TYPE)
-        display_adapter.initialize()
-        return display_adapter
-    except Exception as e:
-        logging.error(f"Failed to initialize display adapter: {e}")
-        raise
+@app.cli.command('init-db')
+def init_db_command():
+    """Clear existing data and create new tables."""
+    init_db()
+    print('Initialized the database.')
 
-@app.route('/')
-def index():
-    """ Serve the main index.html from React build directory if using React. """
-    if DISPLAY_TYPE == 'react':
-        return send_from_directory(app.static_folder, 'index.html')
+@app.teardown_appcontext
+def close_db(exception=None):
+    db = g.pop('db', None)
+    if db is not None:
+        db.close()
+
+@app.route('/process_video', methods=['POST'])
+@statlogtimer
+async def process_video():
+    """API endpoint to asynchronously process a video download."""
+    url = request.json.get('url')
+    output_path = request.json.get('output_path')
+    if url and output_path:
+        try:
+            filename = await media_downloads.download_video(url, output_path)
+            return jsonify({'filename': filename}), 200
+        except Exception as e:
+            current_app.logger.error(f"Failed to process video: {e}")
+            return jsonify({'error': 'Failed to process video'}), 500
     else:
-        return "This service is not configured to use a web-based interface."
+        return jsonify({'error': 'URL and output path are required'}), 400
 
-@app.route('/api/data')
-def get_data():
-    """ API endpoint to get data for the React app or any other AJAX-based frontend. """
-    data = "Dynamic data from the backend"
-    return jsonify({'data': data})
-
-def main():
-    display = None
-    try:
-        display = initialize_display()
-        if DISPLAY_TYPE in ['curses', 'pysimplegui']:
-            while True:
-                data = "Update this with actual data processing logic"
-                display.update(data)
-        elif DISPLAY_TYPE == 'react':
-            app.run(host='0.0.0.0', port=5000, debug=True)
-    except Exception as e:
-        logging.error(f"Error running the application: {e}")
-    finally:
-        if display:
-            display.shutdown()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    app.run(debug=True, use_reloader=False)  # use_reloader=False is important for running asyncio in Flask
