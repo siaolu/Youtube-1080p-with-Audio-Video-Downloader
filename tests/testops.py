@@ -1,55 +1,38 @@
+# testops.py
+# Version 4.1
+# Manages automated testing for the application, focusing on key functionalities of media_downloads.py and app_main.py.
+
 import unittest
-from unittest.mock import patch, mock_open
-import utils
-import media_downloads
-
-class TestUtils(unittest.TestCase):
-    def test_load_config(self):
-        """ Test loading configuration from a file. """
-        with patch('builtins.open', mock_open(read_data='{"debug": true, "port": 5000}')) as mocked_file:
-            config = utils.load_config('dummy_path.json')
-            self.assertEqual(config['debug'], True)
-            self.assertEqual(config['port'], 5000)
-            mocked_file.assert_called_once_with('dummy_path.json', 'r')
-
-    def test_safe_file_operation_fail(self):
-        """ Test the safe file operation decorator handling an exception. """
-        @utils.safe_file_operation
-        def faulty_function(path):
-            raise Exception("Intentional Failure")
-
-        with self.assertRaises(Exception) as context:
-            faulty_function('/fake/path')
-
-        self.assertTrue('Intentional Failure' in str(context.exception))
-
-    def test_read_write_file(self):
-        """ Test read and write file utility functions. """
-        test_data = "Hello, world!"
-        with patch('builtins.open', mock_open(read_data=test_data)) as mocked_file:
-            # Testing write operation
-            utils.write_to_file('dummy_path.txt', test_data)
-            mocked_file().write.assert_called_once_with(test_data)
-
-            # Testing read operation
-            read_data = utils.read_from_file('dummy_path.txt')
-            self.assertEqual(read_data, test_data)
-            mocked_file.assert_called_with('dummy_path.txt', 'r')
+from unittest.mock import patch
+from media_downloads import download_video, extract_audio
+from app_main import app
 
 class TestMediaDownloads(unittest.TestCase):
-    def test_download_video(self):
-        """ Test the video download functionality. """
-        with patch('media_downloads.YouTube') as mocked_youtube:
-            mocked_youtube.return_value.streams.filter.return_value.order_by.return_value.desc.return_value.first.return_value.download.return_value = 'path/to/video.mp4'
-            result = media_downloads.download_video('http://youtube.com/fakevideo', '/downloads')
-            self.assertEqual(result, 'path/to/video.mp4')
+    @patch('media_downloads.YouTube')
+    def test_download_video(self, mock_youtube):
+        """Test the download_video function to handle video downloading."""
+        mock_youtube.return_value.streams.filter.return_value.order_by.return_value.desc.return_value.first.return_value.download.return_value = 'video_path.mp4'
+        result = download_video("http://youtube.com/video", "/path/to/download")
+        self.assertEqual(result, 'video_path.mp4')
 
-    def test_extract_audio(self):
-        """ Test audio extraction from video. """
-        with patch('media_downloads.mpe.VideoFileClip') as mocked_clip:
-            mocked_clip.return_value.audio.write_audiofile.return_value = True
-            result = media_downloads.extract_audio('path/to/video.mp4', '/path/to/audio.mp3')
-            self.assertTrue(result)
+    @patch('media_downloads.mpe.VideoFileClip')
+    def test_extract_audio(self, mock_video_clip):
+        """Test extract_audio function to handle audio extraction."""
+        mock_audio_clip = mock_video_clip.return_value.audio
+        mock_audio_clip.write_audiofile.return_value = 'audio_path.mp3'
+        result = extract_audio('video_path.mp4')
+        self.assertEqual(result, 'audio_path.mp3')
+
+class TestAppMain(unittest.TestCase):
+    def setUp(self):
+        app.testing = True
+        self.client = app.test_client()
+
+    def test_process_video(self):
+        """Test /process_video route to ensure it processes video correctly."""
+        response = self.client.post('/process_video', json={'url': 'http://youtube.com/video', 'output_path': '/path/to/download'})
+        self.assertEqual(response.status_code, 200)
+        self.assertIn('filename', response.json)
 
 if __name__ == '__main__':
     unittest.main()

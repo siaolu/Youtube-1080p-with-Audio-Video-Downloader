@@ -1,36 +1,38 @@
-# Stage 1: Build and compile Python dependencies
+# Use an official Python runtime as a parent image
 FROM python:3.9-slim as builder
-WORKDIR /app
 
-# Install packages required for compilation
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends gcc libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+# Set the working directory in the container
+WORKDIR /usr/src/app
 
-# Install Python dependencies
-COPY requirements.txt .
-RUN pip install --user -r requirements.txt
+# Copy the current directory contents into the container at /usr/src/app
+COPY requirements.txt ./
 
-# Stage 2: Production environment
-FROM python:3.9-slim
-WORKDIR /app
+# Install any needed packages specified in requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy installed Python packages from builder stage
-COPY --from=builder /root/.local /root/.local
-# Copy application code
+# Copy the rest of the application
 COPY . .
 
-# Set environment variables
-ENV PATH=/root/.local/bin:$PATH \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+# Use a multi-stage build to keep the image light
+FROM python:3.9-slim
 
-# Create a non-root user and switch to it
-RUN groupadd -r appgroup && useradd -r -g appgroup appuser
-USER appuser
+WORKDIR /usr/src/app
 
-# Expose the port the app runs on
-EXPOSE 5000
+COPY --from=builder /usr/src/app /usr/src/app
 
-# Command to run the application
-CMD ["python", "app_main.py"]
+# Make port 80 available to the world outside this container
+EXPOSE 80
+
+# Define environment variable
+ENV NAME World
+
+# Run app.py when the container launches
+CMD ["python", "app.py"]
+
+# Non-root user
+RUN useradd -m myuser
+USER myuser
+
+# Health check
+HEALTHCHECK --interval=5m --timeout=3s \
+  CMD curl -f http://localhost/ || exit 1
