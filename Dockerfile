@@ -1,33 +1,37 @@
 # Use an official Python runtime as a parent image
 FROM python:3.9-slim as builder
 
-# Set the working directory in the container
+# Set the working directory in the builder stage
 WORKDIR /usr/src/app
 
-# Copy the current directory contents into the container at /usr/src/app
-COPY requirements.txt ./
+# Install system dependencies required for building certain Python packages
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    build-essential \
+    libffi-dev \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
 
-# Install any needed packages specified in requirements.txt
+# Ensure pip, setuptools, and wheel are updated to avoid any old bugs affecting the build
+RUN pip install --upgrade pip setuptools wheel
+
+# Copy the requirements file and install dependencies
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the application
+# Start a new stage from a smaller base image to reduce the final image size
+FROM python:3.9-slim
+WORKDIR /usr/local/src/app
+COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
 COPY . .
 
-# Use a multi-stage build to keep the image light
-FROM python:3.9-slim
-
-WORKDIR /usr/src/app
-
-COPY --from=builder /usr/src/app /usr/src/app
-
-# Make port 80 available to the world outside this container
+# Expose port 80 to the outside world
 EXPOSE 80
 
-# Define environment variable
-ENV NAME World
-
-# Run app.py when the container launches
+# Command to run the application
 CMD ["python", "app.py"]
+
 
 # Non-root user
 RUN useradd -m myuser
