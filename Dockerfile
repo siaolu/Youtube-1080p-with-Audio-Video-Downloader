@@ -2,7 +2,7 @@
 FROM python:3.9-slim as builder
 
 # Set the working directory in the builder stage
-WORKDIR /usr/src/app
+WORKDIR /app 
 
 # Install system dependencies required for building certain Python packages
 RUN apt-get update && apt-get install -y \
@@ -22,9 +22,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Start a new stage from a smaller base image to reduce the final image size
 FROM python:3.9-slim
-WORKDIR /usr/local/src/app
-COPY --from=builder /usr/local/lib/python3.9/site-packages /usr/local/lib/python3.9/site-packages
+WORKDIR /app
 COPY . .
+COPY --from=builder /app/python3.9/site-packages /app/lib/python3.9/site-packages
+#COPY --from=builder /app /app
+
 
 # Expose port 80 to the outside world
 EXPOSE 80

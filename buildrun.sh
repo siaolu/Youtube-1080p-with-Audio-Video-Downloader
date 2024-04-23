@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # buildrun.sh
-# Version 4.2
-# Script to manage Docker images and containers, including building, running, and selecting images to run.
+# Version 4.3
+# Script to manage Docker images and containers, including operations to build, run, remove, and retrieve logs.
 
 IMAGE_NAME="myapp"
 CONTAINER_NAME="myapp_container"
@@ -31,6 +31,30 @@ function build_image() {
     echo "Docker image built successfully."
 }
 
+function remove_all_images() {
+    echo "Removing all Docker images..."
+    docker rmi $(docker images -a -q)
+    echo "All Docker images removed."
+}
+
+function remove_all_containers() {
+    echo "Stopping and removing all Docker containers..."
+    docker rm $(docker ps -aq)
+    echo "All Docker containers removed."
+}
+
+function get_container_logs() {
+    echo "Available running containers:"
+    docker ps --format "{{.Names}}"
+    read -p "Enter the container name to retrieve logs: " container_name
+    if [ -z "$container_name" ]; then
+        echo "No container selected, exiting."
+        exit 1
+    else
+        docker logs $container_name
+    fi
+}
+
 function stop_and_remove_container() {
     echo "Stopping container..."
     docker stop $CONTAINER_NAME
@@ -49,7 +73,10 @@ echo "1) Build and Run"
 echo "2) Stop and Remove Container"
 echo "3) Restart Container"
 echo "4) List and Run Image"
-echo "5) Exit"
+echo "5) Remove All Images"
+echo "6) Remove All Containers"
+echo "7) Get Container Logs"
+echo "8) Exit"
 read -p "Enter choice: " choice
 
 case $choice in
@@ -67,6 +94,15 @@ case $choice in
         select_and_run_image
         ;;
     5)
+        remove_all_images
+        ;;
+    6)
+        remove_all_containers
+        ;;
+    7)
+        get_container_logs
+        ;;
+    8)
         echo "Exiting..."
         exit 0
         ;;
