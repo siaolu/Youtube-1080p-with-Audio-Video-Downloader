@@ -1,43 +1,39 @@
-# ops-display/curses_adapter.py
+# curses_adapter.py
+# Version 0.53
+# Manages curses-based user interfaces, providing advanced window management and input handling.
+
 import curses
-from display_interface import DisplayInterface
 
-class CursesAdapter(DisplayInterface):
-    """
-    An adapter for implementing a curses-based textual user interface.
-    """
-
+class CursesAdapter:
     def __init__(self):
-        self.stdscr = None
+        self.stdscr = curses.initscr()
+        curses.cbreak()
+        curses.noecho()
+        self.stdscr.keypad(True)
+        curses.start_color()
 
     def initialize(self):
-        """Initialize the curses environment."""
-        self.stdscr = curses.initscr()  # Initialize the window system
-        curses.noecho()  # Turn off key echoing
-        curses.cbreak()  # React to keys instantly without requiring the Enter key
-        self.stdscr.keypad(1)  # Enable special keys to be interpreted as themselves
+        """Set up the initial UI configuration."""
+        curses.init_pair(1, curses.COLOR_RED, curses.COLOR_WHITE)
+        self.stdscr.bkgd(curses.color_pair(1))
+        self.stdscr.refresh()
 
-    def update(self, data):
-        """
-        Update the display with new data.
-        :param data: Data to be displayed on the screen
-        """
-        self.stdscr.clear()  # Clear the screen so we can update it
-        try:
-            self.stdscr.addstr(0, 0, data)  # Try to add string at the first position
-        except curses.error:
-            pass  # Handle the exception if the data is too large to fit on screen
-        self.stdscr.refresh()  # Refresh the screen to show the update
+    def display(self, data):
+        """Display data on the screen."""
+        self.stdscr.clear()
+        height, width = self.stdscr.getmaxyx()
+        for idx, line in enumerate(data.split('\n')):
+            if idx < height:
+                self.stdscr.addstr(idx, 0, line)
+        self.stdscr.refresh()
 
     def shutdown(self):
-        """Clean up and return terminal to previous settings."""
-        if self.stdscr is not None:
-            self.stdscr.keypad(0)
-            curses.echo()
-            curses.nocbreak()
-            curses.endwin()  # Terminate the window session
-            self.stdscr = None
+        """Tear down the curses application."""
+        curses.nocbreak()
+        self.stdscr.keypad(False)
+        curses.echo()
+        curses.endwin()
 
-    def __del__(self):
-        """Ensure the shutdown process is handled."""
-        self.shutdown()
+    def handle_input(self):
+        """Process user input."""
+        return self.stdscr.getch()

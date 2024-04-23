@@ -1,98 +1,87 @@
 # utils.py
+# Version 0.53
+# Provides utility functions for file operations, database access, and other common tasks,
+# ensuring compatibility and integration with the application's latest architecture.
+
 import os
 import json
-import logging
-from contextlib import contextmanager
+import sqlite3
+from flask import g
+from config import DATABASE_URI
 
-# Setup logging configuration
-def setup_logging(level=logging.INFO):
-    logging.basicConfig(
-        level=level,
-        format='%(asctime)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-# Load configuration from a JSON file
-def load_config(file_path):
+def load_config(path='settings.json'):
     """
-    Load configuration data from a JSON file.
+    Load configuration settings from a JSON file.
+    
     Args:
-        file_path (str): The path to the configuration file.
+        path (str): Path to the configuration file.
+        
     Returns:
-        dict: Configuration data.
+        dict: Configuration settings.
     """
-    try:
-        with open(file_path, 'r') as file:
-            return json.load(file)
-    except FileNotFoundError:
-        logging.error(f"Configuration file not found: {file_path}")
-        return {}
-    except json.JSONDecodeError as e:
-        logging.error(f"Error decoding JSON from {file_path}: {e}")
-        return {}
+    with open(path, 'r') as file:
+        return json.load(file)
 
-# Safe file operation decorator for error handling
-def safe_file_operation(func):
+def safe_operation(func):
+    """
+    Decorator to handle exceptions and log errors for any utility function.
+    
+    Args:
+        func (callable): Function to be decorated.
+        
+    Returns:
+        callable: Wrapped function.
+    """
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            logging.error(f"Error during file operation in {func.__name__}: {e}")
-            raise
+            print(f"Error during {func.__name__}: {str(e)}")
+            return None
     return wrapper
 
-@safe_file_operation
-def write_to_file(file_path, data):
+@safe_operation
+def read_file(file_path):
     """
-    Writes data to a file.
+    Reads content from a file.
+    
     Args:
-        file_path (str): The path to the file where data will be written.
-        data (str): The data to write.
-    """
-    with open(file_path, 'w') as file:
-        file.write(data)
-
-@safe_file_operation
-def read_from_file(file_path):
-    """
-    Reads data from a file.
-    Args:
-        file_path (str): The path to the file to read from.
+        file_path (str): Path to the file.
+        
     Returns:
-        str: The contents of the file.
+        str: The content of the file.
     """
     with open(file_path, 'r') as file:
         return file.read()
 
-# Context manager for managing resources, illustrating performance improvement
+def get_db():
+    """
+    Retrieve or create a database connection for the current application context.
+    
+    Returns:
+        sqlite3.Connection: SQLite database connection.
+    """
+    if 'db' not in g:
+        g.db = sqlite3.connect(DATABASE_URI)
+        g.db.row_factory = sqlite3.Row
+    return g.db
+
+from contextlib import contextmanager
+
 @contextmanager
 def managed_file(file_path, mode='r'):
     """
-    Context manager for opening and closing files safely.
+    Context manager for file operations, ensuring proper closure after use.
+    
     Args:
-        file_path (str): The path to the file.
-        mode (str): Mode in which the file will be opened.
+        file_path (str): File path.
+        mode (str): Mode in which to open the file.
+        
     Yields:
-        _io.TextIOWrapper: The file object.
+        _io.TextIOWrapper: Opened file object.
     """
+    file = open(file_path, mode)
     try:
-        resource = open(file_path, mode)
-        yield resource
+        yield file
     finally:
-        resource.close()
-
-# Example of using the managed file context manager
-def read_large_file(file_path):
-    """
-    Reads a large file line by line using a context manager.
-    Args:
-        file_path (str): The path to the large file.
-    Yields:
-        str: Each line from the file.
-    """
-    with managed_file(file_path, 'r') as file:
-        for line in file:
-            yield line.strip()
-
-# Set up logging at the desired level (could be set via config or env var)
-setup_logging(logging.DEBUG)
+        file.close()

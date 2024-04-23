@@ -1,32 +1,30 @@
 # display_factory.py
-from ops-display.curses_adapter import CursesAdapter
-from ops-display.pysimplegui_adapter import PySimpleGUIAdapter
-from ops-display.react_adapter import ReactAdapter  # Assuming React setup is handled differently
+# Version 0.54
+# Factory module for creating display adapters based on configuration or runtime parameters.
 
-def get_display_adapter(display_type):
+from display_interface import DisplayInterface
+from curses_adapter import CursesAdapter
+from pysimplegui_adapter import PySimpleGUIAdapter
+from react_adapter import ReactAdapter
+
+def get_display_adapter(adapter_type):
     """
-    Factory method to get the appropriate display adapter based on the display type.
+    Factory method to get the appropriate display adapter based on the specified type.
     
     Args:
-        display_type (str): The type of display adapter to retrieve.
-                            Options are 'curses', 'pysimplegui', 'react'.
-
+        adapter_type (str): The type of adapter to create, which could be 'curses', 'pysimplegui', or 'react'.
+    
     Returns:
-        DisplayInterface: An instance of a class implementing DisplayInterface.
+        DisplayInterface: An instance of a class that implements DisplayInterface.
     
     Raises:
-        ValueError: If an unknown display type is provided.
+        ValueError: If the adapter type is not recognized.
     """
-    if display_type == 'curses':
+    if adapter_type == 'curses':
         return CursesAdapter()
-    elif display_type == 'pysimplegui':
+    elif adapter_type == 'pysimplegui':
         return PySimpleGUIAdapter()
-    elif display_type == 'react':
-        # React option processed via [app_main.py] flask invoked
-        # -See [app_main.py] for more detail 
-        # - Generally React adapter not defined here.
-        # Uncomment and modify the below line according to your React integration strategy.
+    elif adapter_type == 'react':
         return ReactAdapter()
-        raise NotImplementedError("React display adapter is not implemented.")
     else:
-        raise ValueError(f"Unknown display type: {display_type}")
+        raise ValueError(f"Unknown adapter type: {adapter_type}")
